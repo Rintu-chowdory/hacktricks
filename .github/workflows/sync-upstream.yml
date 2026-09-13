@@ -1,0 +1,38 @@
+name: Sync Upstream
+
+# Keeps the fork in sync with HackTricks-wiki/hacktricks (master stays a
+# clean mirror: this workflow only fast-forwards, it never creates merge
+# commits or local changes).
+
+on:
+  schedule:
+    - cron: '17 4 * * *'  # daily at 04:17 UTC (off-peak)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Fast-forward to upstream/master
+        run: |
+          git remote add upstream https://github.com/HackTricks-wiki/hacktricks.git
+          git fetch upstream master
+          if git merge --ff-only upstream/master; then
+            git push origin master
+            echo "Synced to $(git rev-parse --short upstream/master)"
+          else
+            echo "::error::Cannot fast-forward — upstream history diverged. Manual merge needed."
+            exit 1
+          fi

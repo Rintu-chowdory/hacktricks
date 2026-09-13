@@ -1,0 +1,56 @@
+name: Deploy Pages
+
+# Builds the HackTricks mdBook and publishes it to GitHub Pages as a live
+# mirror. Runs on manual pushes of content, after the daily upstream sync,
+# and on demand.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['.github/**']
+  workflow_run:
+    workflows: ["Sync Upstream"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract mdBook toolchain from the HackTricks translator image
+        run: |
+          docker pull --platform linux/amd64 ghcr.io/hacktricks-wiki/hacktricks-cloud/translator-image:latest
+          cid=$(docker create --platform linux/amd64 ghcr.io/hacktricks-wiki/hacktricks-cloud/translator-image:latest)
+          docker cp "$cid":/usr/local/bin/. /usr/local/bin/
+          mdbook --version
+          mdbook-tabs --version
+
+      - name: Build book
+        run: MDBOOK_PREPROCESSOR__HACKTRICKS__ENV=dev mdbook build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: book
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
